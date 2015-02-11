@@ -1,3 +1,5 @@
+#include <PID_v1.h>
+
 
 /*
 Metal detector robot
@@ -7,13 +9,14 @@ Metal detector robot
 #include <Servo.h>
 #include <Adafruit_GPS.h>
 #include <SoftwareSerial.h>
+#include <PID_v1.h>
 //#include <tmotor>
 //#include <Test.h>
 //#include <Motor.h>
 //include <MotorController.h>
 
 unsigned long time;
-const int clockrate = 10; //millisec
+const int clockrate = 5; //millisec
 const bool debug = true;
 char debugmsg[255] = "";
 
@@ -92,6 +95,13 @@ int cycle_500_counter = 0;
 int cycle_500 = 50; // = .5 sec
 unsigned int pos = 0;
 
+double back_left_velocity, back_left_output, back_left_setpoint;
+double back_right_velocity, back_right_output, back_right_setpoint;
+PID back_left_PID(&back_left_velocity, &back_left_output, &back_left_setpoint, 2,10,.5, DIRECT);
+PID back_right_PID(&back_right_velocity, &back_right_output, &back_right_setpoint, 2,10,.5, DIRECT);
+
+unsigned long prevTime = 0;
+
 void gogogo(int speed, int direction);
 
 //Test teste(5);
@@ -155,6 +165,15 @@ void setup(){
   // every 1 millisecond, and read data from the GPS for you. that makes the
   // loop code a heck of a lot easier!
   useInterrupt(true);
+  
+  back_left_velocity = 0;
+  back_right_velocity = 0;
+  back_left_setpoint = 10;
+  back_right_setpoint = 10;
+  back_left_PID.SetMode(AUTOMATIC);
+  back_right_PID.SetMode(AUTOMATIC);
+  
+  prevTime = millis();
 
   //Serial.println("wheel 1 init");
   //initTestWheel(wheel_direction_1, wheel_pwm_1, wheel_current_draw_1);
@@ -245,6 +264,14 @@ void loop2(){
 
 
 void loop(){
+  
+  
+
+        
+  
+
+  
+  if(true){
   if (time+clockrate < millis()){
     time = millis();
     //cycle_500_counter++;
@@ -255,19 +282,55 @@ void loop(){
     if(cycle >= 100){
       cycle = 0; 
     }
-    if(cycle % 20 == 0){
-      if(true){
-        gogogo(50,0);
+    if(cycle % 1 == 0){
+       back_left_setpoint = 10;
+       back_right_setpoint = 10;
+       back_left_velocity = encoderAPos / (millis() - prevTime);
+       back_right_velocity = encoderBPos / (millis() - prevTime);
+       //Serial.println(encoderAPos);
+       encoderAPos = 0;
+       encoderBPos = 0;
+        //Serial.println(encoderAPos);
+       //Serial.println(back_left_velocity);
+        
+        back_left_PID.Compute();
+        back_right_PID.Compute();
+        analogWrite(wheel_pwm_3, back_left_output);
+        analogWrite(wheel_pwm_1, back_left_output);
+        analogWrite(wheel_pwm_4, back_right_output);
+        analogWrite(wheel_pwm_2, back_right_output);
+        
+        prevTime = millis();
+        
+        
+        if(true){
+          //if(pos != encoderAPos){
+            //pos = encoderAPos;
+            Serial.print("Encoder A: ");
+            Serial.println(back_right_velocity);
+          //} 
+        }
+
+    
+      
+    }
+    
+    if(cycle % 1 == 0){
+      if(false){
+        //gogogo(50,0);
         if(sonar_scan()){
           gogogo(0,0);
           delay(1000);
-          turninplace(50,0);
+          turninplace(70,0);
           delay(2000); 
           gogogo(0,0);
           delay(1000);
           gogogo(50,0);
+        }else{
+         gogogo(50,0); 
         }
       }
+    }
 
       //startup_test();
       //sonar_test();
@@ -363,12 +426,14 @@ void gps_test(){
 }
 
 void encoderA(){
-  (encoderAPinBLast == bitRead(encoder_register, encoderAPinARegNum))?encoderAPos++:encoderAPos--;
-  encoderAPinBLast = bitRead(encoder_register, encoderAPinBRegNum);
+  encoderAPos++;
+  //(encoderAPinBLast == bitRead(encoder_register, encoderAPinARegNum))?encoderAPos++:encoderAPos--;
+  //encoderAPinBLast = bitRead(encoder_register, encoderAPinBRegNum);
 }
 void encoderB(){
-  (encoderBPinBLast == bitRead(encoder_register, encoderBPinARegNum))?encoderBPos++:encoderBPos--;
-  encoderBPinBLast = bitRead(encoder_register,encoderBPinBRegNum);
+  encoderBPos++;
+  //(encoderBPinBLast == bitRead(encoder_register, encoderBPinARegNum))?encoderBPos++:encoderBPos--;
+  //encoderBPinBLast = bitRead(encoder_register,encoderBPinBRegNum);
 }
 void encoderC(){
   (encoderCPinBLast == bitRead(encoder_register, encoderCPinARegNum))?encoderCPos++:encoderCPos--;
@@ -535,7 +600,7 @@ void turninplace(int speed, int direction) // speed 0-255, direction 0 = right
 
 boolean sonar_scan(){
 
-  int tempread = 0;
+  double tempread = 0;
   if(servo_pan_pos >= 130){
     servo_pan_dir = false;
   }
@@ -543,16 +608,23 @@ boolean sonar_scan(){
     servo_pan_dir = true;
   }
   if(servo_pan_dir == true){
-    servo_pan_pos = servo_pan_pos + 5;
+    servo_pan_pos = servo_pan_pos + 2;
   }
   else{
-    servo_pan_pos = servo_pan_pos - 5; 
+    servo_pan_pos = servo_pan_pos - 2; 
   }
 
 
   servo_pan.write(servo_pan_pos);
   Serial.print("Sonar Reading: ");
   tempread = analogRead(sonar_pin);
+  delay(50);
+  tempread = tempread + analogRead(sonar_pin);
+  delay(50);
+  tempread = tempread + analogRead(sonar_pin);
+  delay(50);
+  tempread = tempread + analogRead(sonar_pin);
+  tempread = tempread / 4;
   Serial.println(tempread);
   if(tempread <= 45){ // <= 40 is about 2 feet 147uS/inch
     return true;
